@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import MacronutrientChart from './MacronutrientChart';
 
 function NutritionForm({ onPredict, loading }) {
   const ranges = {
@@ -29,7 +30,7 @@ function NutritionForm({ onPredict, loading }) {
   const [nutrition, setNutrition] = useState({
     fat: 25,    
     carbs: 60,    
-    protein: 12,   
+    protein: 15,   
     calories: 2500
   });
 
@@ -89,9 +90,9 @@ function NutritionForm({ onPredict, loading }) {
   };
 
   const getRangeIndicator = (value, typicalMin, typicalMax) => {
-    if (value < typicalMin) return '⬇️ Below typical range';
-    if (value > typicalMax) return '⬆️ Above typical range';
-    return '✅ Within typical range';
+    if (value < typicalMin) return 'Below typical range';
+    if (value > typicalMax) return 'Above typical range';
+    return 'Within typical range';
   };
 
   return (
@@ -165,6 +166,12 @@ function NutritionForm({ onPredict, loading }) {
             onChange={handleChange}
           />
         </div>
+
+        <MacronutrientChart 
+          fat={nutrition.fat}
+          carbs={nutrition.carbs}
+          protein={nutrition.protein}
+        />
 
         <div className="percentage-summary">
           <div className="summary-card">

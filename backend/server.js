@@ -1,7 +1,16 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const DataProcessor = require('./dataProcessor');
+const MLPredictor = require('./ml_predictor');
 
 const app = express();
+const dataProcessor = new DataProcessor();
+const mlPredictor = new MLPredictor();
+
+const modelPath = path.join(__dirname, 'obesity_model.pkl');
+const useMLModel = fs.existsSync(modelPath);
 
 app.use(cors());
 app.use(express.json());
@@ -9,78 +18,88 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.json({ 
     status: 'ok',
-    message: 'Nutrition-Obesity Predictor is running'
+    message: 'Nutrition-Obesity Predictor API',
+    model: useMLModel ? 'Random Forest ML Model' : 'Statistical Model',
+    endpoints: {
+      predict: '/api/predict (POST)',
+      health: '/ (GET)'
+    }
   });
 });
 
-app.post('/api/predict', (req, res) => {
+app.post('/api/predict', async (req, res) => {
   try {
     const { fat, carbs, protein, calories } = req.body;
     
     if (!fat || !carbs || !protein || !calories) {
       return res.status(400).json({ 
-        error: 'Please provide all nutrition values'
+        error: 'Please provide all nutrition values: fat, carbs, protein, calories'
       });
     }
     
-    const obesity = 22.0 + 
-                   (0.8 * fat) + 
-                   (-0.3 * carbs) + 
-                   (0.1 * protein) + 
-                   (0.002 * (calories / 100));
-    
-    let category;
-    if (obesity < 15) {
-      category = 'Low';
-    } else if (obesity < 28) {
-      category = 'Medium';
-    } else {
-      category = 'High';
+    if (fat < 0 || fat > 100 || carbs < 0 || carbs > 100 || protein < 0 || protein > 100) {
+      return res.status(400).json({
+        error: 'Macronutrient percentages must be between 0 and 100'
+      });
     }
     
-    let cluster;
-    if (fat < 20 && carbs > 70) {
-      cluster = 'Traditional Diet | {Similar Countries: [Afghanistan, Angola, Bangladesh, Cambodia, Cameroon]}';
-    } else if (fat > 30 && carbs < 55) {
-      cluster = 'Western Diet | {Similar Countries: [USA, Australia, Austria, Argentina, Albania]}';
-    } else if (fat > 25 && carbs > 60) {
-      cluster = 'High-Energy Diet | {Similar Countries: [Chile, Colombia, Belize, Central African Republic]}';
-    } else {
-      cluster = 'Transitional Diet | {Similar Countries: [India, Algeria, Benin, Bolivia, Botswana]}';
+    if (calories < 1000 || calories > 5000) {
+      return res.status(400).json({
+        error: 'Calories must be between 1000 and 5000'
+      });
     }
     
-    const messages = {
-      'Low': 'Great! Your nutrition pattern suggests low obesity risk.',
-      'Medium': 'Moderate risk. Consider balancing your macronutrients.',
-      'High': 'High risk. Consult a nutritionist for dietary advice.'
-    };
+    const total = fat + carbs + protein;
+    if (Math.abs(total - 100) > 2) {
+      return res.status(400).json({
+        error: `Macronutrient percentages must sum to 100% (current: ${total}%)`
+      });
+    }
     
-    res.json({
-      obesityPercentage: obesity.toFixed(1),
-      category,
-      cluster,
-      message: messages[category],
-      
-      researchInsights: {
-        fatCorrelation: '+0.509',
-        carbsCorrelation: '-0.527',
-        totalCountries: 141,
-        yearsAnalyzed: '1990-2022',
-        modelAccuracy: '60.5%',
-        varianceExplained: '27.2%'
+    let prediction = dataProcessor.generatePrediction(fat, carbs, protein, calories);
+    
+    if (useMLModel) {
+      try {
+        const mlPrediction = await mlPredictor.predict(fat, carbs, protein, calories);
+        prediction.obesityPercentage = mlPrediction.toFixed(1);
+        prediction.modelType = 'Random Forest ML Model';
+        
+        if (mlPrediction < 12) {
+          prediction.category = 'Low';
+        } else if (mlPrediction < 22) {
+          prediction.category = 'Medium';
+        } else {
+          prediction.category = 'High';
+        }
+        
+        const riskCategory = dataProcessor.getRiskCategory(mlPrediction);
+        prediction.message = riskCategory.message;
+        prediction.recommendations = riskCategory.recommendations;
+      } catch (error) {
+        console.log('ML model unavailable, using statistical model');
+        prediction.modelType = 'Statistical Model';
       }
-    });
+    } else {
+      prediction.modelType = 'Statistical Model';
+    }
+    
+    res.json(prediction);
     
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ 
-      error: 'Something went wrong',
+      error: 'Internal server error',
       details: error.message 
     });
   }
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Backend running on https://nutrition-obesity-app-backend.onrender.com`);
+  console.log(`Backend running on port ${PORT}`);
+  if (useMLModel) {
+    console.log('Using Random Forest ML model for predictions');
+  } else {
+    console.log('ML model not found, using statistical model');
+  }
 });

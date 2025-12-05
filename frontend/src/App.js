@@ -10,7 +10,7 @@ function App() {
   const handlePrediction = async (nutritionData) => {
     setLoading(true);
     try {
-      const response = await fetch('https://nutrition-obesity-app-backend.onrender.com/api/predict', {
+      const response = await fetch('http://localhost:3001/api/predict', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
@@ -39,7 +39,7 @@ function App() {
   return (
     <div className="App">
       <header>
-        <h1>🍎 Nutrition-Obesity Predictor</h1>
+        <h1>Nutrition-Obesity Predictor</h1>
         <p>Based on analysis of 141 countries' nutrition data</p>
       </header>
       
